@@ -139,6 +139,42 @@
   </div>
 
   <script>
+    const API_BASE = (window.location.protocol === 'file:' || window.location.port !== '8080')
+      ? 'http://localhost:8080'
+      : '';
+    const API = `${API_BASE}/api/game`;
+
+    async function apiRequest(path, method = 'GET') {
+      const response = await fetch(`${API}${path}`, { method });
+      const raw = await response.text();
+      let data = null;
+
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch (_) {
+          throw new Error(`Respuesta no válida del servidor (HTTP ${response.status})`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || `HTTP_${response.status}`);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      return data || {};
+    }
+
+    function clearSession() {
+      localStorage.removeItem('playerId');
+      localStorage.removeItem('idPartida');
+      localStorage.removeItem('equipoAsignado');
+      localStorage.removeItem('estrategiaSeleccionada');
+    }
+
     // ====== LÓGICA DEL MODAL DE ELIMINACIÓN ======
     const btnEliminar = document.getElementById('btnEliminar');
     const modalEliminar = document.getElementById('modalEliminar');
@@ -180,6 +216,7 @@
 
       // Confirmar la eliminación y redirige a la página correspondiente
       confirmarEliminar.addEventListener('click', () => {
+        clearSession();
         const href = modalEliminar.dataset.href || 'Paginas/eliminarPartida.html';
         window.location.href = href;
       });
@@ -224,8 +261,8 @@
         }
       });
 
-      // Enviar el nombre y abre el modal de selección de equipo
-      aceptarNombre.addEventListener('click', () => {
+      // Enviar el nombre y registra jugador en backend
+      aceptarNombre.addEventListener('click', async () => {
         const nombre = inputNombre.value.trim();
 
         // Validar que el nombre no esté vacío
@@ -235,15 +272,37 @@
           return;
         }
 
-        // Guardar el nombre en localStorage para acceso desde otras páginas
-        localStorage.setItem('nombreUsuario', nombre);
+        aceptarNombre.disabled = true;
+        try {
+          const join = await apiRequest(`/join?nombre=${encodeURIComponent(nombre)}`, 'POST');
 
-        // Cerrar el modal de nombre
-        cerrarModalNombre();
+          if (join.estadoPartida === 'OCUPADO') {
+            alert('La partida ya está ocupada por 2 jugadores.');
+            return;
+          }
 
-        // Abrir el modal de selección de equipo
-        modalEquipo.setAttribute('aria-hidden', 'false');
-        modalEquipo.classList.add('activo');
+          localStorage.setItem('nombreUsuario', join.nombre || nombre);
+          localStorage.setItem('playerId', join.playerId || '');
+          localStorage.setItem('idPartida', join.idPartida || '');
+          localStorage.setItem('equipoAsignado', join.equipo || '');
+
+          cerrarModalNombre();
+
+          if (join.equipo === 'NAVAL') {
+            modalEstrategiaNaval.setAttribute('aria-hidden', 'false');
+            modalEstrategiaNaval.classList.add('activo');
+          } else if (join.equipo === 'AEREO') {
+            modalEstrategiaAereo.setAttribute('aria-hidden', 'false');
+            modalEstrategiaAereo.classList.add('activo');
+          } else {
+            modalEquipo.setAttribute('aria-hidden', 'false');
+            modalEquipo.classList.add('activo');
+          }
+        } catch (error) {
+          alert(`No se pudo conectar con el servidor: ${error.message}`);
+        } finally {
+          aceptarNombre.disabled = false;
+        }
       });
 
       // Permitir enviar el nombre con Enter
@@ -335,16 +394,28 @@
 
       // Seleccionar estrategia naval y navegar
       btnEstratNaval1.addEventListener('click', () => {
+        if (!localStorage.getItem('playerId')) {
+          alert('Primero debes registrarte en la partida.');
+          return;
+        }
         localStorage.setItem('estrategiaSeleccionada', 'Naval1');
         window.location.href = 'Paginas/start.html';
       });
 
       btnEstratNaval2.addEventListener('click', () => {
+        if (!localStorage.getItem('playerId')) {
+          alert('Primero debes registrarte en la partida.');
+          return;
+        }
         localStorage.setItem('estrategiaSeleccionada', 'Naval2');
         window.location.href = 'Paginas/start.html';
       });
 
       btnEstratNaval3.addEventListener('click', () => {
+        if (!localStorage.getItem('playerId')) {
+          alert('Primero debes registrarte en la partida.');
+          return;
+        }
         localStorage.setItem('estrategiaSeleccionada', 'Naval3');
         window.location.href = 'Paginas/start.html';
       });
@@ -381,16 +452,28 @@
 
       // Seleccionar estrategia aérea y navegar
       btnEstratAereo1.addEventListener('click', () => {
+        if (!localStorage.getItem('playerId')) {
+          alert('Primero debes registrarte en la partida.');
+          return;
+        }
         localStorage.setItem('estrategiaSeleccionada', 'Aereo1');
         window.location.href = 'Paginas/start.html';
       });
 
       btnEstratAereo2.addEventListener('click', () => {
+        if (!localStorage.getItem('playerId')) {
+          alert('Primero debes registrarte en la partida.');
+          return;
+        }
         localStorage.setItem('estrategiaSeleccionada', 'Aereo2');
         window.location.href = 'Paginas/start.html';
       });
 
       btnEstratAereo3.addEventListener('click', () => {
+        if (!localStorage.getItem('playerId')) {
+          alert('Primero debes registrarte en la partida.');
+          return;
+        }
         localStorage.setItem('estrategiaSeleccionada', 'Aereo3');
         window.location.href = 'Paginas/start.html';
       });

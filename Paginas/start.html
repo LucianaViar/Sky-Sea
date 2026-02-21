@@ -35,6 +35,63 @@
   <footer class="footer"></footer>
 
   <script>
+    const API_BASE = (window.location.protocol === 'file:' || window.location.port !== '8080')
+      ? 'http://localhost:8080'
+      : '';
+    const API = `${API_BASE}/api/game`;
+    const playerId = localStorage.getItem('playerId');
+
+    function estrategiaDefaultPorEquipo(equipo) {
+      return equipo === 'AEREO' ? 'Aereo1' : 'Naval1';
+    }
+
+    function estrategiaValidaParaEquipo(estrategia, equipo) {
+      if (!estrategia) return false;
+      if (equipo === 'AEREO') return estrategia.startsWith('Aereo');
+      return estrategia.startsWith('Naval');
+    }
+
+    async function apiRequest(path, method = 'GET') {
+      const response = await fetch(`${API}${path}`, { method });
+      const raw = await response.text();
+      let data = null;
+
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch (_) {
+          throw new Error(`Respuesta no válida del servidor (HTTP ${response.status})`);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || `HTTP_${response.status}`);
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      return data || {};
+    }
+
+    async function refreshPartidaState() {
+      if (!playerId) {
+        window.location.href = '../Index.html';
+        return;
+      }
+
+      try {
+        const state = await apiRequest(`/state2?playerId=${encodeURIComponent(playerId)}`);
+
+        if (state.equipo) {
+          localStorage.setItem('equipoAsignado', state.equipo);
+        }
+      } catch (error) {
+        alert(`Sesión no válida o servidor no disponible: ${error.message}`);
+        window.location.href = '../Index.html';
+      }
+    }
+
     // ====== DEFINICIÓN DE FORMACIONES ======
     const formaciones = {
       Naval1: {
@@ -211,7 +268,13 @@
 
       console.log('Cuadrícula creada:', filasTotal, 'filas x', colsTotal, 'columnas =', celdas.length, 'celdas');
 
-      const estrategiaSeleccionada = localStorage.getItem('estrategiaSeleccionada') || 'Naval1';
+      const equipoAsignado = localStorage.getItem('equipoAsignado') || 'NAVAL';
+      const estrategiaGuardada = localStorage.getItem('estrategiaSeleccionada');
+      const estrategiaSeleccionada = estrategiaValidaParaEquipo(estrategiaGuardada, equipoAsignado)
+        ? estrategiaGuardada
+        : estrategiaDefaultPorEquipo(equipoAsignado);
+
+      localStorage.setItem('estrategiaSeleccionada', estrategiaSeleccionada);
       console.log('Estrategia seleccionada:', estrategiaSeleccionada);
       
       const formacion = formaciones[estrategiaSeleccionada];
@@ -289,6 +352,9 @@
         console.error('No se encontró la formación:', estrategiaSeleccionada);
       }
     })();
+
+    refreshPartidaState();
+    setInterval(refreshPartidaState, 2000);
   </script>
 </body>
 </html>
